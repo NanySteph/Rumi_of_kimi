@@ -17,6 +17,7 @@ interface HealthProps {
 
 export function Health({ store }: HealthProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+
   const [newRecord, setNewRecord] = useState({
     animalId: '',
     type: 'vaccination' as 'vaccination' | 'treatment' | 'checkup',
@@ -28,6 +29,8 @@ export function Health({ store }: HealthProps) {
     nextDate: '',
   });
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const medicalRecords = store.medicalRecords;
   const vaccinations = medicalRecords.filter((r) => r.type === 'vaccination');
   const treatments = medicalRecords.filter((r) => r.type === 'treatment');
@@ -37,17 +40,44 @@ export function Health({ store }: HealthProps) {
     .filter((r) => r.nextDate && new Date(r.nextDate) >= new Date())
     .sort((a, b) => (a.nextDate || '').localeCompare(b.nextDate || ''));
 
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!newRecord.animalId) {
+      newErrors.animalId = 'Debes seleccionar un animal';
+    }
+
+    if (!newRecord.date) {
+      newErrors.date = 'La fecha es obligatoria';
+    }
+
+    if (newRecord.date && new Date(newRecord.date) > new Date()) {
+      newErrors.date = 'La fecha no puede ser futura';
+    }
+
+    if (!newRecord.description.trim()) {
+      newErrors.description = 'La descripción es obligatoria';
+    }
+
+    setErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleAddRecord = () => {
-    if (!newRecord.animalId || !newRecord.date || !newRecord.description) {
-      toast.error('Animal, fecha y descripcion son requeridos');
+    if (!validate()) {
+      toast.error('Revisa los campos del formulario');
       return;
     }
+
     store.addMedicalRecord({
       ...newRecord,
       nextDate: newRecord.nextDate || undefined,
     });
+
     toast.success('Registro medico agregado');
     setAddDialogOpen(false);
+
     setNewRecord({
       animalId: '',
       type: 'vaccination',
@@ -58,6 +88,8 @@ export function Health({ store }: HealthProps) {
       veterinarian: '',
       nextDate: '',
     });
+
+    setErrors({});
   };
 
   const typeConfig = {
@@ -80,7 +112,8 @@ export function Health({ store }: HealthProps) {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
+
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -91,6 +124,7 @@ export function Health({ store }: HealthProps) {
             {medicalRecords.length} registros - {vaccinations.length} vacunaciones - {treatments.length} tratamientos
           </p>
         </div>
+
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="bg-[#232529] hover:bg-black">
@@ -98,20 +132,28 @@ export function Health({ store }: HealthProps) {
               Nuevo Registro
             </Button>
           </DialogTrigger>
+
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Nuevo Registro Medico</DialogTitle>
             </DialogHeader>
+
             <div className="space-y-4 py-2">
+
+              {/* ANIMAL */}
               <div>
                 <Label>Animal *</Label>
                 <Select
                   value={newRecord.animalId}
-                  onValueChange={(v) => setNewRecord({ ...newRecord, animalId: v })}
+                  onValueChange={(v) => {
+                    setNewRecord({ ...newRecord, animalId: v });
+                    setErrors((e) => ({ ...e, animalId: '' }));
+                  }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={errors.animalId ? 'border-red-500' : ''}>
                     <SelectValue placeholder="Seleccionar animal..." />
                   </SelectTrigger>
+
                   <SelectContent>
                     {store.animals
                       .filter((a) => a.status === 'active')
@@ -122,12 +164,18 @@ export function Health({ store }: HealthProps) {
                       ))}
                   </SelectContent>
                 </Select>
+
+                {errors.animalId && (
+                  <p className="text-xs text-red-500">{errors.animalId}</p>
+                )}
               </div>
+
+              {/* TIPO */}
               <div>
                 <Label>Tipo</Label>
                 <Select
                   value={newRecord.type}
-                  onValueChange={(v: 'vaccination' | 'treatment' | 'checkup') =>
+                  onValueChange={(v: any) =>
                     setNewRecord({ ...newRecord, type: v })
                   }
                 >
@@ -141,61 +189,96 @@ export function Health({ store }: HealthProps) {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* FECHA */}
               <div>
                 <Label>Fecha *</Label>
                 <Input
                   type="date"
                   value={newRecord.date}
-                  onChange={(e) => setNewRecord({ ...newRecord, date: e.target.value })}
+                  className={errors.date ? 'border-red-500' : ''}
+                  onChange={(e) => {
+                    setNewRecord({ ...newRecord, date: e.target.value });
+                    setErrors((err) => ({ ...err, date: '' }));
+                  }}
                 />
+                {errors.date && (
+                  <p className="text-xs text-red-500">{errors.date}</p>
+                )}
               </div>
+
+              {/* DESCRIPCION */}
               <div>
                 <Label>Descripcion *</Label>
                 <Input
-                  placeholder="Descripcion del procedimiento..."
                   value={newRecord.description}
-                  onChange={(e) => setNewRecord({ ...newRecord, description: e.target.value })}
+                  placeholder="Descripcion del procedimiento..."
+                  className={errors.description ? 'border-red-500' : ''}
+                  onChange={(e) => {
+                    setNewRecord({ ...newRecord, description: e.target.value });
+                    setErrors((err) => ({ ...err, description: '' }));
+                  }}
                 />
+                {errors.description && (
+                  <p className="text-xs text-red-500">{errors.description}</p>
+                )}
               </div>
+
+              {/* MEDICACION */}
               {newRecord.type !== 'checkup' && (
                 <>
                   <div>
                     <Label>Medicamento</Label>
                     <Input
-                      placeholder="Nombre del medicamento..."
                       value={newRecord.medication}
-                      onChange={(e) => setNewRecord({ ...newRecord, medication: e.target.value })}
+                      onChange={(e) =>
+                        setNewRecord({ ...newRecord, medication: e.target.value })
+                      }
                     />
                   </div>
+
                   <div>
                     <Label>Dosis</Label>
                     <Input
-                      placeholder="Ej: 5ml"
                       value={newRecord.dose}
-                      onChange={(e) => setNewRecord({ ...newRecord, dose: e.target.value })}
+                      onChange={(e) =>
+                        setNewRecord({ ...newRecord, dose: e.target.value })
+                      }
                     />
                   </div>
                 </>
               )}
+
+              {/* VETERINARIO */}
               <div>
                 <Label>Veterinario</Label>
                 <Input
-                  placeholder="Nombre del veterinario..."
                   value={newRecord.veterinarian}
-                  onChange={(e) => setNewRecord({ ...newRecord, veterinarian: e.target.value })}
+                  onChange={(e) =>
+                    setNewRecord({ ...newRecord, veterinarian: e.target.value })
+                  }
                 />
               </div>
+
+              {/* PROXIMA FECHA */}
               <div>
                 <Label>Proxima Fecha (opcional)</Label>
                 <Input
                   type="date"
                   value={newRecord.nextDate}
-                  onChange={(e) => setNewRecord({ ...newRecord, nextDate: e.target.value })}
+                  onChange={(e) =>
+                    setNewRecord({ ...newRecord, nextDate: e.target.value })
+                  }
                 />
               </div>
-              <Button onClick={handleAddRecord} className="w-full bg-[#232529] hover:bg-black">
+
+              <Button
+                onClick={handleAddRecord}
+                className="w-full bg-[#232529] hover:bg-black"
+              >
                 Guardar Registro
               </Button>
+
             </div>
           </DialogContent>
         </Dialog>

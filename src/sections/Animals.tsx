@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '@/hooks/useStore';
-import { PawPrint, Plus, Search, Filter, Grid3X3, List } from 'lucide-react';
+import { PawPrint, Plus, Search, Filter, Grid3X3, List, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,12 +11,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { AnimalStatus, AnimalSex, ReproductionType, ReproductiveStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useAnimalValidation } from '@/hooks/Useanimalvalidation';
 
 interface AnimalsProps {
   store: ReturnType<typeof useStore>;
 }
 
 type ViewMode = 'grid' | 'list';
+
+// Small helper to show field-level error messages
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+      <AlertCircle size={12} />
+      {message}
+    </p>
+  );
+}
 
 export function Animals({ store }: AnimalsProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -42,6 +54,13 @@ export function Animals({ store }: AnimalsProps) {
     reproductiveStatus: undefined as ReproductiveStatus | undefined,
   });
 
+  const { errors, hasErrors, handleBlur, handleChange, validateAll, clearErrors } =
+    useAnimalValidation(store.animals);
+
+  // Helpers so we don't repeat patterns
+  const fieldClass = (field: string) =>
+    cn(errors[field as keyof typeof errors] ? 'border-red-400 focus-visible:ring-red-300' : '');
+
   const filteredAnimals = store.animals.filter((animal) => {
     const matchesSearch =
       !search ||
@@ -59,14 +78,12 @@ export function Animals({ store }: AnimalsProps) {
   const deceasedAnimals = filteredAnimals.filter((a) => a.status === 'deceased');
 
   const handleAddAnimal = () => {
-    if (!newAnimal.name || !newAnimal.id || !newAnimal.breed) {
-      toast.error('Nombre, ID y Raza son requeridos');
+    const validationErrors = validateAll(newAnimal);
+    if (Object.values(validationErrors).some(Boolean)) {
+      toast.error('Por favor corrige los errores antes de guardar');
       return;
     }
-    if (store.animals.some((a) => a.id === newAnimal.id)) {
-      toast.error(`Ya existe un animal con el ID ${newAnimal.id}`);
-      return;
-    }
+
     store.addAnimal({
       ...newAnimal,
       weightKg: Number(newAnimal.weightKg) || 0,
@@ -77,8 +94,13 @@ export function Animals({ store }: AnimalsProps) {
       reproductionType: newAnimal.reproductionType,
       reproductiveStatus: newAnimal.reproductiveStatus,
     });
+
     toast.success(`Animal ${newAnimal.name} agregado exitosamente`);
     setAddDialogOpen(false);
+    resetForm();
+  };
+
+  const resetForm = () => {
     setNewAnimal({
       name: '',
       id: '',
@@ -95,6 +117,25 @@ export function Animals({ store }: AnimalsProps) {
       reproductionType: undefined,
       reproductiveStatus: undefined,
     });
+    clearErrors();
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setAddDialogOpen(open);
+    if (!open) resetForm();
+  };
+
+  // Generic field change handler
+  const set = <K extends keyof typeof newAnimal>(field: K, value: (typeof newAnimal)[K]) => {
+    const updated = { ...newAnimal, [field]: value };
+
+    // Auto-clear reproductive fields when switching to male
+    if (field === 'sex' && value === 'male') {
+      updated.reproductiveStatus = undefined;
+    }
+
+    setNewAnimal(updated);
+    handleChange(field, value, updated);
   };
 
   const statusColors: Record<string, string> = {
@@ -122,7 +163,7 @@ export function Animals({ store }: AnimalsProps) {
             {store.animals.length} animales registrados - {activeAnimals.length} activos
           </p>
         </div>
-        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <Dialog open={addDialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogTrigger asChild>
             <Button size="sm" className="bg-[#232529] hover:bg-black">
               <Plus size={16} className="mr-1" />
@@ -134,49 +175,74 @@ export function Animals({ store }: AnimalsProps) {
               <DialogTitle>Agregar Nuevo Animal</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
+
+              {/* ID + Nombre */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="animal-id">ID *</Label>
+                  <Label htmlFor="animal-id">
+                    ID <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="animal-id"
-                    placeholder="Ej: AR-025"
+                    placeholder="Ej: RA-000"
                     value={newAnimal.id}
-                    onChange={(e) => setNewAnimal({ ...newAnimal, id: e.target.value })}
+                    className={fieldClass('id')}
+                    onChange={(e) => set('id', e.target.value)}
+                    onBlur={() => handleBlur('id', newAnimal.id, newAnimal)}
                   />
+                  <FieldError message={errors.id} />
                 </div>
                 <div>
-                  <Label htmlFor="animal-name">Nombre *</Label>
+                  <Label htmlFor="animal-name">
+                    Nombre <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="animal-name"
                     placeholder="Nombre del animal"
                     value={newAnimal.name}
-                    onChange={(e) => setNewAnimal({ ...newAnimal, name: e.target.value })}
+                    className={fieldClass('name')}
+                    onChange={(e) => set('name', e.target.value)}
+                    onBlur={() => handleBlur('name', newAnimal.name, newAnimal)}
                   />
+                  <FieldError message={errors.name} />
                 </div>
               </div>
+
+              {/* Raza */}
               <div>
-                <Label htmlFor="animal-breed">Raza *</Label>
+                <Label htmlFor="animal-breed">
+                  Raza <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="animal-breed"
                   placeholder="Ej: Holstein, Angus..."
                   value={newAnimal.breed}
-                  onChange={(e) => setNewAnimal({ ...newAnimal, breed: e.target.value })}
+                  className={fieldClass('breed')}
+                  onChange={(e) => set('breed', e.target.value)}
+                  onBlur={() => handleBlur('breed', newAnimal.breed, newAnimal)}
                 />
+                <FieldError message={errors.breed} />
               </div>
+
+              {/* Fecha + Sexo */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Fecha de Nacimiento</Label>
                   <Input
                     type="date"
                     value={newAnimal.dateOfBirth}
-                    onChange={(e) => setNewAnimal({ ...newAnimal, dateOfBirth: e.target.value })}
+                    className={fieldClass('dateOfBirth')}
+                    max={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => set('dateOfBirth', e.target.value)}
+                    onBlur={() => handleBlur('dateOfBirth', newAnimal.dateOfBirth, newAnimal)}
                   />
+                  <FieldError message={errors.dateOfBirth} />
                 </div>
                 <div>
                   <Label>Sexo</Label>
                   <Select
                     value={newAnimal.sex}
-                    onValueChange={(v: AnimalSex) => setNewAnimal({ ...newAnimal, sex: v })}
+                    onValueChange={(v: AnimalSex) => set('sex', v)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -188,66 +254,91 @@ export function Animals({ store }: AnimalsProps) {
                   </Select>
                 </div>
               </div>
+
+              {/* Peso + Altura */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Peso (kg)</Label>
                   <Input
                     type="number"
+                    min={1}
+                    max={1000}
                     placeholder="0"
                     value={newAnimal.weightKg}
-                    onChange={(e) => setNewAnimal({ ...newAnimal, weightKg: e.target.value })}
+                    className={fieldClass('weightKg')}
+                    onChange={(e) => set('weightKg', e.target.value)}
+                    onBlur={() => handleBlur('weightKg', newAnimal.weightKg, newAnimal)}
                   />
+                  <FieldError message={errors.weightKg} />
                 </div>
                 <div>
                   <Label>Altura (cm)</Label>
                   <Input
                     type="number"
+                    min={1}
+                    max={155}
                     placeholder="0"
                     value={newAnimal.heightCm}
-                    onChange={(e) => setNewAnimal({ ...newAnimal, heightCm: e.target.value })}
+                    className={fieldClass('heightCm')}
+                    onChange={(e) => set('heightCm', e.target.value)}
+                    onBlur={() => handleBlur('heightCm', newAnimal.heightCm, newAnimal)}
                   />
+                  <FieldError message={errors.heightCm} />
                 </div>
               </div>
+
+              {/* Ubicación */}
               <div>
-                <Label>Ubicacion</Label>
+                <Label>Ubicación</Label>
                 <Input
-                  placeholder="Ej: Potrero A"
+                  placeholder="Ej: Establo..."
                   value={newAnimal.location}
-                  onChange={(e) => setNewAnimal({ ...newAnimal, location: e.target.value })}
+                  onChange={(e) => set('location', e.target.value)}
                 />
               </div>
+
+              {/* Padre + Madre */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Padre (ID)</Label>
                   <Input
                     placeholder="ID del padre"
                     value={newAnimal.fatherId}
-                    onChange={(e) => setNewAnimal({ ...newAnimal, fatherId: e.target.value })}
+                    className={fieldClass('fatherId')}
+                    onChange={(e) => set('fatherId', e.target.value)}
+                    onBlur={() => handleBlur('fatherId', newAnimal.fatherId, newAnimal)}
                   />
+                  <FieldError message={errors.fatherId} />
                 </div>
                 <div>
                   <Label>Madre (ID)</Label>
                   <Input
                     placeholder="ID de la madre"
                     value={newAnimal.motherId}
-                    onChange={(e) => setNewAnimal({ ...newAnimal, motherId: e.target.value })}
+                    className={fieldClass('motherId')}
+                    onChange={(e) => set('motherId', e.target.value)}
+                    onBlur={() => handleBlur('motherId', newAnimal.motherId, newAnimal)}
                   />
+                  <FieldError message={errors.motherId} />
                 </div>
               </div>
+
+              {/* Reproducción */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Tipo de Reproduccion</Label>
+                  <Label>Tipo de Reproducción</Label>
                   <Select
                     value={newAnimal.reproductionType || ''}
-                    onValueChange={(v) => setNewAnimal({ ...newAnimal, reproductionType: v as ReproductionType })}
+                    disabled={newAnimal.sex === 'male'}
+                    onValueChange={(v) => set('reproductionType', v as ReproductionType)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar..." />
+                    <SelectTrigger className={cn(newAnimal.sex === 'male' && 'opacity-50 cursor-not-allowed')}>
+                      <SelectValue placeholder={newAnimal.sex === 'male' ? 'Solo para hembras' : 'Seleccionar...'} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="natural">Monta Natural</SelectItem>
-                      <SelectItem value="insemination">Inseminacion AI</SelectItem>
-                      <SelectItem value="embryo">Transf. Embrion</SelectItem>
+                      <SelectItem value="insemination">Inseminación AI</SelectItem>
+                      <SelectItem value="embryo">Transferencia Embrión</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -255,20 +346,40 @@ export function Animals({ store }: AnimalsProps) {
                   <Label>Estado Reproductivo</Label>
                   <Select
                     value={newAnimal.reproductiveStatus || ''}
-                    onValueChange={(v) => setNewAnimal({ ...newAnimal, reproductiveStatus: v as ReproductiveStatus })}
+                    disabled={newAnimal.sex === 'male'}
+                    onValueChange={(v) => set('reproductiveStatus', v as ReproductiveStatus)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar..." />
+                    <SelectTrigger className={cn(newAnimal.sex === 'male' && 'opacity-50 cursor-not-allowed')}>
+                      <SelectValue placeholder={newAnimal.sex === 'male' ? 'Solo para hembras' : 'Seleccionar...'} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="empty">Vacia</SelectItem>
+                      <SelectItem value="empty">Vacía</SelectItem>
                       <SelectItem value="pregnant">Preñada</SelectItem>
                       <SelectItem value="in_heat">En Celo</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FieldError message={errors.reproductiveStatus} />
                 </div>
               </div>
-              <Button onClick={handleAddAnimal} className="w-full bg-[#232529] hover:bg-black">
+
+              {/* Nota informativa si hay errores */}
+              {hasErrors && (
+                <p className="text-xs text-red-500 flex items-center gap-1 bg-red-50 border border-red-200 rounded px-3 py-2">
+                  <AlertCircle size={13} />
+                  Revisa los campos marcados en rojo antes de guardar.
+                </p>
+              )}
+
+              <Button
+                onClick={handleAddAnimal}
+                disabled={hasErrors}
+                className={cn(
+                  'w-full',
+                  hasErrors
+                    ? 'bg-gray-300 cursor-not-allowed text-gray-500'
+                    : 'bg-[#232529] hover:bg-black'
+                )}
+              >
                 Guardar Animal
               </Button>
             </div>
@@ -331,7 +442,7 @@ export function Animals({ store }: AnimalsProps) {
         </div>
       </div>
 
-      {/* Animal Counts */}
+      {/* Animal Counts Tabs */}
       <div className="flex gap-4 mb-4 text-xs">
         <button
           onClick={() => setStatusFilter('active')}
@@ -381,7 +492,7 @@ export function Animals({ store }: AnimalsProps) {
                   </div>
                   {animal.reproductiveStatus && (
                     <Badge variant="outline" className={cn('text-[10px]', reproColors[animal.reproductiveStatus])}>
-                      {animal.reproductiveStatus === 'pregnant' ? 'Preñada' : animal.reproductiveStatus === 'in_heat' ? 'Celo' : 'Vacia'}
+                      {animal.reproductiveStatus === 'pregnant' ? 'Preñada' : animal.reproductiveStatus === 'in_heat' ? 'Celo' : 'Vacía'}
                     </Badge>
                   )}
                 </div>
@@ -409,8 +520,8 @@ export function Animals({ store }: AnimalsProps) {
                   <th className="text-left py-2.5 px-4 text-xs font-medium text-gray-500">Raza</th>
                   <th className="text-left py-2.5 px-4 text-xs font-medium text-gray-500">Sexo</th>
                   <th className="text-left py-2.5 px-4 text-xs font-medium text-gray-500">Estado</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-medium text-gray-500">Reproduccion</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-medium text-gray-500">Ubicacion</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-medium text-gray-500">Reproducción</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-medium text-gray-500">Ubicación</th>
                 </tr>
               </thead>
               <tbody>
@@ -437,7 +548,7 @@ export function Animals({ store }: AnimalsProps) {
                     <td className="py-2.5 px-4">
                       {animal.reproductiveStatus ? (
                         <Badge variant="outline" className={cn('text-[10px]', reproColors[animal.reproductiveStatus])}>
-                          {animal.reproductiveStatus === 'pregnant' ? 'Preñada' : animal.reproductiveStatus === 'in_heat' ? 'Celo' : 'Vacia'}
+                          {animal.reproductiveStatus === 'pregnant' ? 'Preñada' : animal.reproductiveStatus === 'in_heat' ? 'Celo' : 'Vacía'}
                         </Badge>
                       ) : (
                         <span className="text-xs text-gray-400">-</span>

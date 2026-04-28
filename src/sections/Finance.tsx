@@ -17,6 +17,13 @@ interface FinanceProps {
 
 export function Finance({ store }: FinanceProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  // ✅ Formato de moneda Lempiras
+  const currencyFormatter = new Intl.NumberFormat('es-HN', {
+    style: 'currency',
+    currency: 'HNL',
+  });
+
   const [newTransaction, setNewTransaction] = useState({
     date: '',
     category: 'sale' as 'sale' | 'veterinary_expense' | 'feed_cost' | 'supply_purchase',
@@ -69,7 +76,6 @@ export function Finance({ store }: FinanceProps) {
     supply_purchase: 'bg-blue-50 text-blue-700 border-blue-200',
   };
 
-  // Summary by category
   const categorySummary = transactions.reduce(
     (acc, t) => {
       if (!acc[t.category]) acc[t.category] = { income: 0, expense: 0 };
@@ -80,7 +86,6 @@ export function Finance({ store }: FinanceProps) {
     {} as Record<string, { income: number; expense: number }>
   );
 
-  // Monthly data
   const monthlyData = [
     { month: 'Nov', income: 800, expense: 900 },
     { month: 'Dic', income: 800, expense: 350 },
@@ -89,9 +94,7 @@ export function Finance({ store }: FinanceProps) {
     { month: 'Mar', income: 1350, expense: 1616 },
   ];
 
-  const maxVal = Math.max(
-    ...monthlyData.map((d) => Math.max(d.income, d.expense))
-  );
+  const maxVal = Math.max(...monthlyData.map((d) => Math.max(d.income, d.expense)));
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -103,7 +106,7 @@ export function Finance({ store }: FinanceProps) {
             Finanzas
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {transactions.length} transacciones - Balance: ${balance.toLocaleString()}
+            {transactions.length} transacciones - Balance: {currencyFormatter.format(balance)}
           </p>
         </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
@@ -215,7 +218,7 @@ export function Finance({ store }: FinanceProps) {
                 <TrendingUp size={18} className="text-emerald-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-emerald-700">${totalIncome.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-emerald-700">{currencyFormatter.format(totalIncome)}</p>
                 <p className="text-xs text-gray-600">Ingresos totales</p>
               </div>
             </div>
@@ -228,7 +231,7 @@ export function Finance({ store }: FinanceProps) {
                 <TrendingDown size={18} className="text-red-600" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-red-700">${totalExpense.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-red-700">{currencyFormatter.format(totalExpense)}</p>
                 <p className="text-xs text-gray-600">Gastos totales</p>
               </div>
             </div>
@@ -242,7 +245,7 @@ export function Finance({ store }: FinanceProps) {
               </div>
               <div>
                 <p className={cn('text-2xl font-bold', balance >= 0 ? 'text-emerald-700' : 'text-red-700')}>
-                  ${balance.toLocaleString()}
+                  {currencyFormatter.format(balance)}
                 </p>
                 <p className="text-xs text-gray-600">Balance neto</p>
               </div>
@@ -267,12 +270,12 @@ export function Finance({ store }: FinanceProps) {
                   <div
                     className="w-3 bg-emerald-400 rounded-t"
                     style={{ height: `${(data.income / maxVal) * 100}px` }}
-                    title={`Ingreso: $${data.income}`}
+                    title={`Ingreso: ${currencyFormatter.format(data.income)}`}
                   />
                   <div
                     className="w-3 bg-red-400 rounded-t"
                     style={{ height: `${(data.expense / maxVal) * 100}px` }}
-                    title={`Gasto: $${data.expense}`}
+                    title={`Gasto: ${currencyFormatter.format(data.expense)}`}
                   />
                 </div>
                 <span className="text-xs text-gray-500">{data.month}</span>
@@ -292,7 +295,7 @@ export function Finance({ store }: FinanceProps) {
         </CardContent>
       </Card>
 
-      {/* Category Summary */}
+      {/* Tables & Category */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <Card className="border border-gray-200 lg:col-span-2">
           <CardHeader className="pb-3">
@@ -303,10 +306,10 @@ export function Finance({ store }: FinanceProps) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100">
-                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Fecha</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Descripcion</th>
-                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Categoria</th>
-                    <th className="text-right py-2 px-3 text-xs font-medium text-gray-500">Monto</th>
+                    <th className="text-left py-2 px-3 text-xs text-gray-500">Fecha</th>
+                    <th className="text-left py-2 px-3 text-xs text-gray-500">Descripcion</th>
+                    <th className="text-left py-2 px-3 text-xs text-gray-500">Categoria</th>
+                    <th className="text-right py-2 px-3 text-xs text-gray-500">Monto</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -323,7 +326,7 @@ export function Finance({ store }: FinanceProps) {
                           </Badge>
                         </td>
                         <td className={`py-2 px-3 text-xs text-right font-medium ${tx.type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString()}
+                          {tx.type === 'income' ? '+' : '-'}{currencyFormatter.format(tx.amount)}
                         </td>
                       </tr>
                     ))}
@@ -350,10 +353,10 @@ export function Finance({ store }: FinanceProps) {
                     </div>
                     <div className="text-right">
                       <p className={cn('text-xs font-medium', net >= 0 ? 'text-emerald-600' : 'text-red-600')}>
-                        {net >= 0 ? '+' : '-'}${Math.abs(net).toLocaleString()}
+                        {net >= 0 ? '+' : '-'}{currencyFormatter.format(Math.abs(net))}
                       </p>
                       <p className="text-[10px] text-gray-400">
-                        +${sums.income.toLocaleString()} / -${sums.expense.toLocaleString()}
+                        +{currencyFormatter.format(sums.income)} / -{currencyFormatter.format(sums.expense)}
                       </p>
                     </div>
                   </div>
